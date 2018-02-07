@@ -1,7 +1,9 @@
 /**
-* University of Skövde | Big data programming
-* Log streaming example.
+* University of Skövde
+* Master in Data Science | Big data programming course
 * 
+* Coded by: Elio Ventocilla.
+* Description: Log streaming example.
 */
 
 import org.apache.spark.SparkConf
@@ -25,10 +27,7 @@ object LogStream {
 
 		// Checkpoint is needed for stateful transformations
 		// Spark should have write permissions on given folder
-		ssc.checkpoint("<path to a checkpoint folder>")
-
-		// ---------------------------------------------------------------
-
+		ssc.checkpoint("/path/to/checkpoint/folder")
 
 
 		// ------------------ Parsing methods ----------------------------
@@ -42,61 +41,67 @@ object LogStream {
 			else
 				"Linux"
 
-		def getRequestMethod(s: String): String =
-			s.dropWhile(_ != '"').tail.takeWhile(_ != ' ')
+		def getMethod(s: String): String =
+			s.dropWhile(_ != '"')
+			.tail
+			.takeWhile(_ != ' ')
 
 		def getStatus(s: String): Int = {
 			val i = s.indexOf("\" ")
 			s.substring(i + 2, i + 5).toInt
 		}
 
-		// --------------------------------------------------------------
-
-
-
 
 		// ------------------ Stateless transformation ------------------
 
 		// 'logs' is the input DStream
-		val logs = ssc.textFileStream("<path to logs' folder>")
+		val logs = ssc.textFileStream("/path/to/logs/folder")
 
 		// Do a request method (e.g. GET, POST, etc) count for Linux
-		val linuxLogs = logs.filter(_.contains("Linux"))
-		val requestPairs = linuxLogs.map(s => (getRequestMethod(s), 1))
-		val requestCount = requestPairs.reduceByKey(_ + _)
-
-		// Every 5 seconds...
-		requestCount.print()
-
-		// ---------------------------------------------------------------
+		logs
+			.filter(_.contains("Linux"))
+			.map(s => (getMethod(s), 1))
+			.reduceByKey(_ + _)
+			.print()
 
 
+		// ------------------ Stateful transformations ------------------
+
+		// ---- Windowed
+
+		logs
+			.map(s => (getOS(s), 1))
+			.reduceByKeyAndWindow((a: Int, b: Int) => {		// Only on pair DStreams.
+				a + b, Seconds(20), Seconds(15)
+			})
+			.print()
 
 
-		// ------------------ Statefull transformations ------------------
+		// ---- Update state
 
-		// Window operation
-		val osPairs = logs.map(s => (getOS(s), 1))
-		val osCounts = osPairs.reduceByKeyAndWindow((a: Int, b: Int) => a + b, Seconds(20), Seconds(15))
-		osCounts.print()
-
-
-		// Update state on window
+		/**
+		* Updates the state for every key in the DStream.
+		* @param newValues Corresponds to a sequence of new, incomming values
+		* 	for a given key.
+		* @param state Corresponds to the old state for that given key. The first time
+		*	the function is called for a given key, the value of the state will be None.
+		* @return The new state.
+		*/
 		def updateState(newValues: Seq[Int], state: Option[Int]): Option[Int] = {
-			var n = 0
-			if (newValues.size > 0)
-				n = newValues.head
-
-			Some(state.getOrElse(0) + n)
+			newValues.isEmpty match {
+				case true => state
+				case false => Some(state.getOrElse(0) + newValues.length)
+			}
 		}
 
-		val osState = osCounts.updateStateByKey(updateState _)
-		osState.print()
+		logs
+			.map(s => (getStatus(s), 1))
+			.updateStateByKey(updateState _)				// Only on pair DStreams.
+			.print()
 
-		// ---------------------------------------------------------------
 
-
-
+		// ----------------- Begin streaming ------------------
+		
 		// Start receiving data through the input DStream and run the rest of the code...
 		ssc.start()
 		// ...until the user requests termination.
