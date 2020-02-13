@@ -27,8 +27,8 @@ ssc.checkpoint("/tmp/checkpoints/")
 val logs = ssc.textFileStream("/tmp/log-files/")
 ```
 
-3. Update the paths to the logs folder in the `../loggen/fake-log-crontab file`,
-so that they point to the logs folder, as well as to the `../loggen/apache-fake-log-gen.py`
+3. Update the paths of the `../loggen/fake-log-crontab` file, so that they point
+to the logs folder, as well as to the `../loggen/apache-fake-log-gen.py`
 Python script, e.g.:
 ```
 * * * * * /path/to/log-streaming/loggen/apache-fake-log-gen.py -o LOG -n 200 -d /tmp/log-files/
@@ -59,6 +59,6 @@ For Structured streaming:
 spark-submit --class "structured.Example" --master local[*] target/scala-2.12/log-streaming_2.12-1.0.jar
 ```
 
-Once it is up and running you should see the results from the streaming transformations.
-To stop the Spark streaming process, hit Ctr+C. To stop the generation of log
+Once it is up and running, you should see the results from the streaming transformations
+in the console. To stop the Spark streaming process, hit Ctr+C. To stop the generation of log
 files, use `crontab -r` in the terminal.
